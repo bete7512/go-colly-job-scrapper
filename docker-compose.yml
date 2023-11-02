@@ -1,0 +1,9 @@
+version: "3.6"
+services:
+  go-colly-scraper:
+    container_name: go-colly-scraper
+    build:
+      context: .
+      dockerfile: Dockerfile       
+    restart: always
+    network_mode: host
