@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gocolly/colly"
 )
 
@@ -24,6 +25,46 @@ type Job struct {
 }
 
 func main() {
+
+	router := gin.Default()
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Free Jobs API",
+		})
+	})
+
+	jobs, err := getJobsFromScraper()
+	if err != nil {
+		fmt.Println("Failed to scrape jobs. Fetching from JSON file.")
+		jobs, err = getJobsFromJSON()
+		if err != nil {
+			return
+		}
+	}
+	router.GET("/jobs", func(c *gin.Context) {
+		c.JSON(200, jobs)
+	})
+	router.Run(":8787")
+
+}
+
+func saveJobsAsJSON(jobs []Job) {
+	jsonData, err := json.MarshalIndent(jobs, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling jobs to JSON:", err)
+		return
+	}
+
+	err = os.WriteFile("jobs.json", jsonData, 0644)
+	if err != nil {
+		fmt.Println("Error writing JSON file:", err)
+		return
+	}
+
+	fmt.Println("Jobs data saved as 'jobs.json'")
+}
+
+func getJobsFromScraper() ([]Job, error) {
 	collector := colly.NewCollector(
 		colly.AllowedDomains("hahu.jobs"),
 	)
@@ -47,55 +88,24 @@ func main() {
 			job.TimeLeft = el.ChildText("span.flex.font-body.text-sm.md\\:text-md.leading-9.font-light.capitalize")
 			jobs = append(jobs, job)
 		})
-		// save as a file  json
-
-		// fmt.Println(jobs)
+		fmt.Println("Scraped", len(jobs), "jobs")
 		saveJobsAsJSON(jobs)
-		// js, _ := json.Marshal(jobs)
-		// fmt.Println(string(js))
-	})
-	collector.OnResponse(func(r *colly.Response) {
-		fmt.Println("Response received", r.Request.URL)
-		fmt.Println("Headers", r.Headers)
-		fmt.Println("Body", string(r.Body))
 	})
 	collector.Visit("https://hahu.jobs/jobs")
-
+	return jobs, nil
 }
 
-// func unescapeUnicode(input string) string {
-// 	// Use strconv.Unquote to unescape Unicode sequences
-// 	unescaped, err := strconv.Unquote(`"` + input + `"`)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return input
-// 	}
-
-// 	return unescaped
-// }
-
-// collector.OnRequest(func(r *colly.Request) {
-// 	fmt.Println("Visiting", r.URL.String())
-// 	fmt.Println("Headers", r.Headers)
-
-// })
-// collector.OnResponse(func(r *colly.Response) {
-// 	fmt.Println("Response received", r.Request.URL)
-// 	fmt.Println("Headers", r.Headers)
-// })
-
-func saveJobsAsJSON(jobs []Job) {
-	jsonData, err := json.MarshalIndent(jobs, "", "  ")
+func getJobsFromJSON() ([]Job, error) {
+	data, err := os.ReadFile("jobs.json")
 	if err != nil {
-		fmt.Println("Error marshaling jobs to JSON:", err)
-		return
+		return nil, err
 	}
 
-	err = os.WriteFile("jobs.json", jsonData, 0644)
+	var jobs []Job
+	err = json.Unmarshal(data, &jobs)
 	if err != nil {
-		fmt.Println("Error writing JSON file:", err)
-		return
+		return nil, err
 	}
 
-	fmt.Println("Jobs data saved as 'jobs.json'")
+	return jobs, nil
 }
